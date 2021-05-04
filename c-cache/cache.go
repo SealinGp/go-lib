@@ -3,7 +3,6 @@ package c_cache
 import (
 	"container/list"
 	"hash/fnv"
-	"log"
 	"sync"
 	"sync/atomic"
 )
@@ -19,6 +18,10 @@ const (
 	GB           = MB * Unit
 )
 
+type Observer interface {
+	OnDelete()
+}
+
 type Value interface {
 	MemSize() int
 }
@@ -33,11 +36,13 @@ type CCache struct {
 	curMem   int32
 	limitMem MemUnit
 	buckets  []*bucket
+	observer Observer
 }
 
 type CCacheOpt struct {
 	LimitMem   MemUnit
 	BucketSize int
+	Observer   Observer
 }
 
 type bucket struct {
@@ -63,6 +68,7 @@ func NewCCache(opt *CCacheOpt) *CCache {
 		curMem:   0,
 		limitMem: opt.LimitMem,
 		buckets:  make([]*bucket, opt.BucketSize),
+		observer: opt.Observer,
 	}
 
 	for i := 0; i < opt.BucketSize; i++ {
@@ -87,11 +93,10 @@ func (c *CCache) Get(key string) (Value, bool) {
 
 	bucket.RLock()
 	curEle, ok := bucket.entries[key]
+	bucket.RUnlock()
 	if !ok {
-		bucket.RUnlock()
 		return nil, false
 	}
-	bucket.RUnlock()
 
 	bucket.Lock()
 	bucket.lruList.MoveToFront(curEle)
@@ -119,12 +124,14 @@ func (c *CCache) Set(key string, val Value) {
 		oldEntry := curEle.Value.(*entry)
 		diffSize := val.MemSize() - oldEntry.value.MemSize()
 		if diffSize <= 0 {
-			curEle.Value = val
+			oldEntry.value = val
+			bucket.lruList.MoveToFront(curEle)
 			atomic.AddInt32(&c.curMem, int32(diffSize))
 			return
 		}
 
 		newMem = diffSize
+		newEntry = oldEntry
 	}
 
 	curMem := atomic.LoadInt32(&c.curMem)
@@ -136,23 +143,23 @@ func (c *CCache) Set(key string, val Value) {
 
 		lastEntry := lastEle.Value.(*entry)
 		delta := lastEntry.value.MemSize() + len(lastEntry.key)
-
 		bucket.lruList.Remove(lastEle)
 		delete(bucket.entries, lastEntry.key)
 
 		curMem = atomic.AddInt32(&c.curMem, -int32(delta))
-	}
 
-	log.Printf("??")
+		if c.observer != nil {
+			c.observer.OnDelete()
+		}
+	}
 
 	curEle, ok = bucket.entries[key]
 	if ok {
 		curEle.Value = newEntry
 		bucket.lruList.MoveToFront(curEle)
 	} else {
-		ele := &list.Element{Value: newEntry}
+		ele := bucket.lruList.PushFront(newEntry)
 		bucket.entries[key] = ele
-		bucket.lruList.PushFront(ele)
 	}
 	atomic.AddInt32(&c.curMem, int32(newMem))
 }
