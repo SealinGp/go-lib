@@ -7,28 +7,38 @@ import (
 
 //
 func TestNewToken(t *testing.T) {
-	pubKey, priKey, err := RsaGenKeyPair(1024, "PKIX", "PKCS1")
-	if err != nil {
-		return
-	}
-	to := NewToken(pubKey, priKey)
-	log.Printf("%v", pubKey)
-	log.Printf("%v", priKey)
+	token := NewToken()
+	log.Printf("%v", token.GetPublicKey())
+	log.Printf("%v", token.GetPrivateKey())
 
 	msg := "123"
-	ts, e := to.Encrypt([]byte(msg))
+
+	//public key encrypted
+	ts, e := token.Encrypt([]byte(msg))
 	if e != nil {
 		t.Errorf("encrypt failed. err:%v", e)
 		return
 	}
 
-	deStr, e := to.Decrypt(ts)
+	//private key decrypted
+	deStr, e := token.Decrypt(ts)
 	if e != nil {
 		t.Errorf("decrypt failed. err:%v", e)
 		return
 	}
 
-	to.Sign(msg, "PKCS1", "sha1")
+	//sign
+	enSign, err := token.Sign(msg)
+	if err != nil {
+		log.Printf("[E] sign failed. err:%v", err)
+		return
+	}
+
+	err = token.VerfiySign(msg, enSign)
+	if err != nil {
+		log.Printf("[E] verify sign failed. err:%v", err)
+		return
+	}
 
 	t.Logf("[I] success str:%v", deStr)
 }
