@@ -19,16 +19,16 @@ func TestCLogInit(t *testing.T) {
 }
 
 //use file and level
-func TestCLogInit1(t *testing.T) {
+func TestCLogLevel(t *testing.T) {
 	//not use
 	cf := CLogInit(&CLogOptions{
 		Flag:     log.Ltime | log.Lshortfile,
 		Path:     "./test.log",
-		LogLevel: LEVEL_ERR,
+		LogLevel: LEVEL_INFO,
 	})
 
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		I("info log. x:v, a:%v", "b")
@@ -36,6 +36,10 @@ func TestCLogInit1(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		E("nihao xxx. x:v, a:%v", "b")
+	}()
+	go func() {
+		defer wg.Done()
+		log.Printf("normal log xx. a:a1, b:%v","b1")
 	}()
 	defer cf()
 
