@@ -3,6 +3,7 @@ package c_log
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -41,11 +42,17 @@ const (
 	ERR_PREFIX  = "[E]"
 )
 
+var _ (io.Writer) = (*clog)(nil)
+
 var (
 	ErrFileNotExists = errors.New("file not exists")
 
 	cl = &clog{}
 )
+
+func Writer() io.Writer {
+	return cl
+}
 
 func CLogInit(opt *CLogOptions) CloseFunc {
 	if opt.Path == "" {
